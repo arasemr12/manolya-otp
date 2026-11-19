@@ -1,9 +1,10 @@
-import { Delete, Download, Plus, TrainTrack, Trash, Upload } from "lucide-react";
+import { Delete, Download, Plus, QrCode, TrainTrack, Trash, Upload } from "lucide-react";
 import type { Route } from "./+types/home";
 import { getRemaningTimeForOtpReset } from "~/lib/otp";
 import { useEffect, useRef, useState } from "react";
 import { generate, generateSecret } from "otplib";
 import CreateModal from "~/components/CreateModal";
+import { Html5QrcodeScanner } from "html5-qrcode";
 
 export function meta({ }: Route.MetaArgs) {
   return [
@@ -33,6 +34,8 @@ export default function Home() {
   useEffect(() => {
     otpRef.current = otp;
   }, [otp]);
+
+  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   const resetOtpCodes = async () => {
     const snapshot = otpRef.current;
@@ -162,18 +165,56 @@ export default function Home() {
     }, 100);
   };
 
+  const scanQRCode = () => {
+    if(scannerRef.current){
+      scannerRef.current.clear();
+      return scannerRef.current = null;
+    }
+
+    let html5QrcodeScanner = new Html5QrcodeScanner(
+      "reader",
+      { fps: 10, qrbox: { width: 250, height: 250 } }, false);
+
+    scannerRef.current = html5QrcodeScanner;
+
+    html5QrcodeScanner.render((decodedText, decodedResult) => {
+      console.log(`Code matched = ${decodedText}`, decodedResult);
+      try {
+        let url = new URL(decodedText);
+        const secret = url.searchParams.get("secret");
+        const issuer = url.searchParams.get("issuer") || "";
+        const name = url?.pathname || "";
+
+        if (!secret) return;
+
+        createOtp({ issuer, name, secret });
+      } catch (error) {
+
+      }
+
+      scannerRef.current = null;
+      html5QrcodeScanner.clear();
+    }, (a) => {
+      console.log(a);
+    });
+  };
+
   return (
     <>
       <CreateModal active={createModal} close={() => setCreateModal(false)} create={createOtp} />
       <div className="w-full h-full flex flex-col items-center justify-between pt-32">
         <div className="lg:w-2/3 w-full flex flex-col items-start gap-3">
+          <div id="reader"></div>
           <span>This website allows you to view your OTP codes in a completely secure manner, exclusively on your local computer. I recommend exporting the list and storing it in a secure vault. If the list is lost, you may be unable to access it again; therefore, please ensure you upload the list to the cloud.</span>
           <h1 className="text-2xl font-semibold">{remainingTime.toFixed(2)}</h1>
           <div className="flex flex-row items-center gap-3">
             <button onClick={importOtp} className="flex flex-row items-center gap-3"><Download />Import OTP List</button>
             <button onClick={exportOtp} className="flex flex-row items-center gap-3"><Upload />Export OTP List</button>
           </div>
-          <button onClick={(e) => setCreateModal(true)} className="flex flex-row items-center gap-3"><Plus />Add</button>
+          <div className="flex flex-row items-center gap-3">
+            <button onClick={(e) => setCreateModal(true)} className="flex flex-row items-center gap-3"><Plus />Add</button>
+            <button onClick={scanQRCode} className="flex flex-row items-center gap-3"><QrCode />Scan QR Code</button>
+          </div>
           <div className="w-full flex flex-row flex-wrap items-center justify-between gap-5 mb-8">
             {otp.map((otpData) => (
               <div key={otpData.secret} onClick={() => copy(otpData.code)} className="w-full lg:w-[calc(50%-10px)] bg-gray-800 hover:bg-gray-700 rounded-lg cursor-pointer duration-300 overflow-hidden">
