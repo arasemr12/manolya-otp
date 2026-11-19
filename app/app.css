@@ -1,0 +1,20 @@
+@import "tailwindcss";
+
+@layer components {
+  * {
+    @apply p-0 m-0 box-border outline-0 border-0;
+  }
+
+  html,
+  body {
+    @apply bg-gray-950 text-white w-full h-full;
+  }
+
+  button {
+    @apply py-2 px-4 bg-indigo-600 hover:bg-indigo-800 cursor-pointer duration-300 rounded;
+  }
+
+  input {
+    @apply bg-gray-800 border-2 border-gray-700 rounded py-2 px-4;
+  }
+}
