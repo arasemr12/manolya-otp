@@ -160,7 +160,7 @@ export default function Home() {
     }
   };
 
-  const createOtp = ({name,issuer,secret,algorithm,digits,period}:Otp) => {
+  const createOtp = ({name,issuer,secret,algorithm = "sha1",digits = 6,period = 30}:Otp) => {
     let list = [...otpRef.current];
 
     list.unshift({
@@ -169,6 +169,9 @@ export default function Home() {
       issuer,
       secret,
       code: "0",
+      algorithm,
+      digits,
+      period,
     });
 
     localStorage.setItem("list", JSON.stringify(list));
