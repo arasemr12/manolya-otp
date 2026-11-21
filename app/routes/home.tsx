@@ -1,8 +1,8 @@
+import { v4 as uuidv4 } from 'uuid';
 import { Delete, Download, Plus, QrCode, TrainTrack, Trash, Upload } from "lucide-react";
 import type { Route } from "./+types/home";
-import { getRemaningTimeForOtpReset } from "~/lib/otp";
+import { generate, getRemaningTimeForOtpReset } from "~/lib/otp";
 import { useEffect, useRef, useState } from "react";
-import { generate, generateSecret } from "otplib";
 import CreateModal from "~/components/CreateModal";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import type { Otp } from "~/types";
@@ -15,22 +15,13 @@ export function meta({ }: Route.MetaArgs) {
   ];
 }
 
-const secret = "3OVXBQMJ23LNHTAHSNMYSYQIECROLQEQ";
-
 export default function Home() {
   const [remainingTime, setRemainingTime] = useState<number>(0);
   const [remainingTimePercent, setRemainingTimePercent] = useState<number>(0);
 
   const [createModal, setCreateModal] = useState<boolean>(false);
 
-  const [otp, setOtp] = useState<Otp[]>([
-    {
-      name: "arasemr1234@gmail.com",
-      issuer: "Binance.com",
-      secret: "GPACYGPBIPPSKQ4FRG5E6GO5R7NNRXG2",
-      code: "0",
-    },
-  ]);
+  const [otp, setOtp] = useState<Otp[]>([]);
 
   const [loading, setLoading] = useState<boolean>(true);
 
@@ -158,9 +149,9 @@ export default function Home() {
     input.click();
   };
 
-  const deleteOtp = (secret: string) => {
+  const deleteOtp = (id: string) => {
     try {
-      let newList = otpRef.current.filter((e) => e.secret != secret);
+      let newList = otpRef.current.filter((e) => e.id != id);
       setOtp(newList);
 
       localStorage.setItem("list", JSON.stringify(newList));
@@ -169,10 +160,11 @@ export default function Home() {
     }
   };
 
-  const createOtp = ({ issuer, name, secret }: { issuer: string, name: string, secret: string }) => {
+  const createOtp = ({name,issuer,secret,algorithm,digits,period}:Otp) => {
     let list = [...otpRef.current];
 
     list.unshift({
+      id: uuidv4(),
       name,
       issuer,
       secret,
@@ -200,14 +192,18 @@ export default function Home() {
     html5QrcodeScanner.render((decodedText, decodedResult) => {
       console.log(`Code matched = ${decodedText}`, decodedResult);
       try {
-        let url = new URL(decodedText);
+        const url = new URL(decodedText);
         const secret = url.searchParams.get("secret");
         const issuer = url.searchParams.get("issuer") || "";
-        const name = url?.pathname || "";
+        const name = decodeURIComponent(url.pathname.replace(/^\/+totp\//, ""));
+
+        const algorithm = (url.searchParams.get("algorithm")?.toLowerCase() as Otp["algorithm"]) || "sha1";
+        const digits = Number(url.searchParams.get("digits")) || 6;
+        const period = Number(url.searchParams.get("period")) || 30;
 
         if (!secret) return;
 
-        createOtp({ issuer, name, secret });
+        createOtp({ issuer, name, secret, algorithm, digits, period, code:"-1", id:uuidv4() });
       } catch (error) {
 
       }
@@ -227,7 +223,7 @@ export default function Home() {
       {loading && (
         <div className="fixed z-50 top-0 left-0 bg-black w-full h-full flex flex-col items-center justify-center gap-5 select-none">
           <span className="text-4xl font-bold">Loading</span>
-          <Loading/>
+          <Loading />
         </div>
       )}
       <CreateModal active={createModal} close={() => setCreateModal(false)} create={createOtp} />
@@ -246,16 +242,16 @@ export default function Home() {
           </div>
           <div className="w-full flex flex-row flex-wrap items-center justify-between gap-5 mb-8">
             {otp.map((otpData) => (
-              <div key={otpData.secret} onClick={() => copy(otpData?.code || "-1")} className="w-full lg:w-[calc(50%-10px)] bg-gray-800 hover:bg-gray-700 rounded-lg cursor-pointer duration-300 overflow-hidden">
-                <span className="h-[1px] w-full block rounded-full overflow-hidden">
-                  <span className={`h-[1px] ${remainingTimePercent > 50 ? 'bg-purple-600' : 'bg-yellow-600'} block rounded-full overflow-hidden`} style={{ width: `${remainingTimePercent}%` }}></span>
+              <div key={otpData.id} onClick={() => copy(otpData?.code || "-1")} className="w-full lg:w-[calc(50%-10px)] bg-gray-800 hover:bg-gray-700 rounded-lg cursor-pointer duration-300 overflow-hidden">
+                <span className="h-px w-full block rounded-full overflow-hidden">
+                  <span className={`h-px ${remainingTimePercent > 50 ? 'bg-purple-600' : 'bg-yellow-600'} block rounded-full overflow-hidden`} style={{ width: `${remainingTimePercent}%` }}></span>
                 </span>
                 <div className="p-6 flex flex-col items-start w-full">
                   <div className="w-full flex flex-row items-center justify-between">
                     <span className="text-xl font-semibold uppercase">{otpData?.issuer}</span>
                     <button onClick={(e) => {
                       e.stopPropagation();
-                      deleteOtp(otpData.secret);
+                      deleteOtp(otpData.id);
                     }}><Trash /></button>
                   </div>
                   <span className="mb-4 opacity-50">{otpData?.name}</span>
