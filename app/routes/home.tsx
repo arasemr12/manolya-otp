@@ -5,11 +5,13 @@ import { useEffect, useRef, useState } from "react";
 import { generate, generateSecret } from "otplib";
 import CreateModal from "~/components/CreateModal";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import type { Otp } from "~/types";
+import { Loading } from "~/components/Loading";
 
 export function meta({ }: Route.MetaArgs) {
   return [
-    { title: "New React Router App" },
-    { name: "description", content: "Welcome to React Router!" },
+    { title: "Manolya OTP" },
+    { name: "description", content: "Manolya OTP" },
   ];
 }
 
@@ -21,7 +23,7 @@ export default function Home() {
 
   const [createModal, setCreateModal] = useState<boolean>(false);
 
-  const [otp, setOtp] = useState([
+  const [otp, setOtp] = useState<Otp[]>([
     {
       name: "arasemr1234@gmail.com",
       issuer: "Binance.com",
@@ -30,22 +32,23 @@ export default function Home() {
     },
   ]);
 
+  const [loading, setLoading] = useState<boolean>(true);
+
   const otpRef = useRef(otp);
+
   useEffect(() => {
     otpRef.current = otp;
   }, [otp]);
 
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
-  const resetOtpCodes = async () => {
-    const snapshot = otpRef.current;
-
+  const resetOtpCodes = async (list: Otp[] = otpRef.current) => {
     const results = await Promise.allSettled(
-      snapshot.map((item) => generate({ secret: item.secret }))
+      list.map((item) => generate({ secret: item.secret }))
     );
 
     const codeMap = new Map(
-      snapshot.map((item, i) => {
+      list.map((item, i) => {
         const result = results[i];
         const code = result.status === "fulfilled" ? result.value : "-1";
         return [item.secret, code];
@@ -61,6 +64,22 @@ export default function Home() {
   };
 
   useEffect(() => {
+    (async () => {
+      try {
+        let list = localStorage.getItem("list");
+        if (!list) return;
+
+        let json: Otp[] = JSON.parse(list);
+        setOtp(json);
+
+        await resetOtpCodes(json);
+
+        setLoading(false);
+      } catch (error) {
+
+      }
+    })();
+
     let frameId: number;
     let lastCounter = -1;
 
@@ -126,10 +145,10 @@ export default function Home() {
           let result = reader.result as string;
           let json = JSON.parse(result);
 
+          localStorage.setItem("list", result);
+
           setOtp(json);
-          setTimeout(() => {
-            resetOtpCodes();
-          }, 100);
+          resetOtpCodes(json);
         } catch (error) {
           console.error("Incorrect json file:", error);
         }
@@ -143,6 +162,8 @@ export default function Home() {
     try {
       let newList = otpRef.current.filter((e) => e.secret != secret);
       setOtp(newList);
+
+      localStorage.setItem("list", JSON.stringify(newList));
     } catch (error) {
 
     }
@@ -158,15 +179,14 @@ export default function Home() {
       code: "0",
     });
 
-    setOtp(list);
+    localStorage.setItem("list", JSON.stringify(list));
 
-    setTimeout(() => {
-      resetOtpCodes();
-    }, 100);
+    setOtp(list);
+    resetOtpCodes(list);
   };
 
   const scanQRCode = () => {
-    if(scannerRef.current){
+    if (scannerRef.current) {
       scannerRef.current.clear();
       return scannerRef.current = null;
     }
@@ -193,7 +213,10 @@ export default function Home() {
       }
 
       scannerRef.current = null;
-      html5QrcodeScanner.clear();
+      html5QrcodeScanner.pause();
+      setTimeout(() => {
+        html5QrcodeScanner.clear();
+      }, 100);
     }, (a) => {
       console.log(a);
     });
@@ -201,6 +224,12 @@ export default function Home() {
 
   return (
     <>
+      {loading && (
+        <div className="fixed z-50 top-0 left-0 bg-black w-full h-full flex flex-col items-center justify-center gap-5 select-none">
+          <span className="text-4xl font-bold">Loading</span>
+          <Loading/>
+        </div>
+      )}
       <CreateModal active={createModal} close={() => setCreateModal(false)} create={createOtp} />
       <div className="w-full h-full flex flex-col items-center justify-between pt-32">
         <div className="lg:w-2/3 w-full flex flex-col items-start gap-3">
@@ -217,7 +246,7 @@ export default function Home() {
           </div>
           <div className="w-full flex flex-row flex-wrap items-center justify-between gap-5 mb-8">
             {otp.map((otpData) => (
-              <div key={otpData.secret} onClick={() => copy(otpData.code)} className="w-full lg:w-[calc(50%-10px)] bg-gray-800 hover:bg-gray-700 rounded-lg cursor-pointer duration-300 overflow-hidden">
+              <div key={otpData.secret} onClick={() => copy(otpData?.code || "-1")} className="w-full lg:w-[calc(50%-10px)] bg-gray-800 hover:bg-gray-700 rounded-lg cursor-pointer duration-300 overflow-hidden">
                 <span className="h-[1px] w-full block rounded-full overflow-hidden">
                   <span className={`h-[1px] ${remainingTimePercent > 50 ? 'bg-purple-600' : 'bg-yellow-600'} block rounded-full overflow-hidden`} style={{ width: `${remainingTimePercent}%` }}></span>
                 </span>
@@ -230,7 +259,7 @@ export default function Home() {
                     }}><Trash /></button>
                   </div>
                   <span className="mb-4 opacity-50">{otpData?.name}</span>
-                  <span className="text-3xl font-bold">{otpData.code.slice(0, 3) + " " + otpData.code.slice(3)}</span>
+                  {otpData.code && <span className="text-3xl font-bold">{otpData.code.slice(0, 3) + " " + otpData.code.slice(3)}</span>}
                 </div>
               </div>
             ))}
