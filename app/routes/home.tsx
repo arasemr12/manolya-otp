@@ -67,7 +67,7 @@ export default function Home() {
     (async () => {
       try {
         let list = localStorage.getItem("list");
-        if (!list) return;
+        if (!list) return setLoading(false);
 
         let json: Otp[] = JSON.parse(list);
         setOtp(json);
@@ -76,7 +76,7 @@ export default function Home() {
 
         setLoading(false);
       } catch (error) {
-
+        setLoading(false);
       }
     })();
 
